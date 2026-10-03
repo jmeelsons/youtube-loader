@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube Downloader</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e1e2f, #2a2a40);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        .card {
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        h1 { margin: 0 0 8px; font-size: 26px; }
+        p.sub { color: #aaa; margin: 0 0 28px; font-size: 14px; }
+        label { display: block; margin-bottom: 6px; font-size: 13px; color: #ccc; }
+        input[type=text] {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+        input:focus { outline: none; border-color: #ff3b3b; }
+        .types { display: flex; gap: 10px; margin-bottom: 22px; }
+        .type {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            cursor: pointer;
+            user-select: none;
+            transition: all .2s;
+            font-size: 14px;
+        }
+        .type.active {
+            background: #ff3b3b;
+            border-color: #ff3b3b;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: #ff3b3b;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: .2s;
+        }
+        button:hover:not(:disabled) { background: #e02d2d; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .status { margin-top: 16px; font-size: 13px; text-align: center; min-height: 20px; }
+        .status.err { color: #ff6b6b; }
+        .status.ok { color: #6bff9e; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>⬇️ YouTube Downloader</h1>
+    <p class="sub">Скачивай видео и музыку по ссылке</p>
+
+    <label for="url">Ссылка на видео YouTube</label>
+    <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+    <label>Формат</label>
+    <div class="types">
+        <div class="type active" data-type="video">🎬 Видео</div>
+        <div class="type" data-type="audio">🎵 Аудио</div>
+    </div>
+
+    <button id="btn">Скачать</button>
+    <div class="status" id="status"></div>
+</div>
+
+<script>
+    let type = 'video';
+    document.querySelectorAll('.type').forEach(el => {
+        el.addEventListener('click', () => {
+            document.querySelectorAll('.type').forEach(x => x.classList.remove('active'));
+            el.classList.add('active');
+            type = el.dataset.type;
+        });
+    });
+
+    const btn = document.getElementById('btn');
+    const statusEl = document.getElementById('status');
+
+    btn.addEventListener('click', async () => {
+        const url = document.getElementById('url').value.trim();
+        if (!url) {
+            showStatus('Введите ссылку', 'err');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Скачивание...';
+        showStatus('Обработка видео, подождите...', '');
+
+        try {
+            const form = new URLSearchParams();
+            form.append('url', url);
+            form.append('type', type);
+
+            const resp = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: form.toString()
+            });
+
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(err);
+            }
+
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const match = cd.match(/filename="(.+?)"/);
+            const filename = match ? match[1] : (type === 'audio' ? 'audio.mp3' : 'video.mp4');
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+
+            showStatus('✅ Готово: ' + filename, 'ok');
+        } catch (e) {
+            showStatus('❌ ' + e.message, 'err');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Скачать';
+        }
+    });
+
+    function showStatus(msg, cls) {
+        statusEl.textContent = msg;
+        statusEl.className = 'status ' + cls;
+    }
+</script>
+</body>
+</html>
